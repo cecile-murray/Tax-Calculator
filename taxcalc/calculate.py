@@ -114,6 +114,7 @@ class Calculator(object):
 
     def calc_all(self):
         FilingStatus(self.params, self.records)
+        HasIncomeTax(self.params, self.records)
         Adj(self.params, self.records)
         CapGains(self.params, self.records)
         SSBenefits(self.params, self.records)
@@ -143,10 +144,12 @@ class Calculator(object):
         DEITC(self.params, self.records)
         OSPC_TAX(self.params, self.records)
         ExpandIncome(self.params, self.records)
+        #tpc_exp_cash(self.params, self.records)
 
     def calc_all_test(self):
         all_dfs = []
         add_df(all_dfs, FilingStatus(self.params, self.records))
+        add_df(all_dfs, HasIncomeTax(self.records))
         add_df(all_dfs, Adj(self.params, self.records))
         add_df(all_dfs, CapGains(self.params, self.records))
         add_df(all_dfs, SSBenefits(self.params, self.records))
@@ -176,6 +179,7 @@ class Calculator(object):
         add_df(all_dfs, DEITC(self.params, self.records))
         add_df(all_dfs, OSPC_TAX(self.params, self.records))
         add_df(all_dfs, ExpandIncome(self.params, self.records))
+        #add_df(all_dfs, tpc_exp_cash(self.params, self.records))
         totaldf = pd.concat(all_dfs, axis=1)
         return totaldf
 
@@ -242,6 +246,9 @@ class Calculator(object):
             # AGI
             agi = (calc.records.c00100 * calc.records.s006).sum()
 
+            # Postive federal income tax after credits
+            pos_tax = ((calc.records.e08800 > 0) * calc.records.s006).sum()
+
             # number of itemizers
             ID1 = calc.records.c04470 * calc.records.s006
             STD1 = calc.records._standard * calc.records.s006
@@ -294,7 +301,7 @@ class Calculator(object):
             # ospc_tax
             revenue1 = (calc.records._ospctax * calc.records.s006).sum()
 
-            table.append([returns/math.pow(10, 6), agi/math.pow(10, 9),
+            table.append([returns/math.pow(10, 6), pos_tax, agi/math.pow(10, 9),
                           NumItemizer1/math.pow(10, 6), ID/math.pow(10, 9),
                           NumSTD/math.pow(10, 6), STD/math.pow(10, 9),
                           PE/math.pow(10, 9), taxinc/math.pow(10, 9),
@@ -307,7 +314,7 @@ class Calculator(object):
             calc.increment_year()
 
         df = DataFrame(table, row_years,
-                       ["Returns (#m)", "AGI ($b)", "Itemizers (#m)",
+                       ["Returns (#m)", "Num Positive Inc Tax", "AGI ($b)", "Itemizers (#m)",
                         "Itemized Deduction ($b)", "Standard Deduction Filers (#m)",
                         "Standard Deduction ($b)", "Personal Exemption ($b)",
                         "Taxable income ($b)", "Regular Tax ($b)", "AMT income ($b)",

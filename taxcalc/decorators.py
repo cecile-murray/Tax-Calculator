@@ -290,7 +290,9 @@ def iterate_jit(parameters=None, **kwargs):
             return func
 
         kwargs_for_func = toolz.keyfilter(in_args.__contains__, kwargs)
+
         kwargs_for_jit = toolz.keyfilter(jit_args.__contains__, kwargs)
+    
 
         # Any name that is a taxcalc parameter (or the special case 'puf'
         # Boolean flag is given special treatment. Identify those names here

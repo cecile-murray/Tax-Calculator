@@ -3,7 +3,7 @@ import pandas as pd
 from pandas import DataFrame
 from collections import defaultdict
 
-STATS_COLUMNS = ['_expanded_income', 'c00100', '_standard', 'c04470', 'c04600', 'c04800', 'c05200',
+STATS_COLUMNS = ['_expanded_income', 'has_tax', 'has_payroll', 'e08800', '_fica', 'c00100', '_standard', 'c04470', 'c04600', 'c04800', 'c05200',
                  'c62100','c09600', 'c05800', 'c09200', '_refund', 'c07100',
                  '_ospctax','s006']
 
@@ -11,10 +11,16 @@ STATS_COLUMNS = ['_expanded_income', 'c00100', '_standard', 'c04470', 'c04600', 
 # TABLE_LABELS below. this allows us to use TABLE_LABELS to map a
 # label to the correct column in our distribution table
 
-TABLE_COLUMNS = ['s006','c00100', 'num_returns_StandardDed', '_standard',
+TABLE_COLUMNS = ['s006', 'has_tax', 'has_payroll', 'e08800', '_fica', 'c00100', 'num_returns_StandardDed', '_standard',
                  'num_returns_ItemDed', 'c04470', 'c04600', 'c04800', 'c05200',
                  'c62100','num_returns_AMT', 'c09600', 'c05800',  'c07100','c09200',
                  '_refund','_ospctax']
+
+# Added by Cecile to replicate TPC distribution tables
+#TPC_COLUMNS = ['s006', '_expanded_income', 'c00100', 'e6500']
+
+TPC_LABELS = ['Returns', 'Expanded Income', 'AGI', 'Total Income Tax']
+
 
 TABLE_LABELS = ['Returns', 'AGI', 'Standard Deduction Filers',
                 'Standard Deduction', 'Itemizers',
@@ -41,6 +47,11 @@ SMALL_INCOME_BINS = [-1e14, 0, 4999, 9999, 14999, 19999, 24999, 29999, 39999,
 WEBAPP_INCOME_BINS = [-1e14, 0, 9999, 19999, 29999, 39999, 49999, 74999, 99999,
                    199999, 499999, 1000000, 1e14]
 
+# Change made by Cecile 7.20.15 to actually correspond with TPC distributional bins
+USEFUL_TPC_BINS = [-1e14, 9999, 19999, 29999, 39999, 49999, 74999, 99999,
+                  199999, 499999, 999999, 1e14]
+
+TPC_BIN_LABELS = ['less_10k', '10-20k', '20-30k', '30-40k', '40-50k', '50-75k', '75-100k', '100-200k', '200-500k', '500-1M', '1M+']
 
 def extract_array(f):
     """
@@ -322,12 +333,15 @@ def add_income_bins(df, compare_with="soi", bins=None, right=True, income_measur
         elif compare_with == "webapp":
             bins = WEBAPP_INCOME_BINS
 
+        elif compare_with == "srs_tpc":
+            bins = USEFUL_TPC_BINS
+
         else:
             msg = "Unknown compare_with arg {0}".format(compare_with)
             raise ValueError(msg)
 
     # Groupby income_measure bins
-    df['bins'] = pd.cut(df[income_measure], bins, right=right)
+    df['bins'] = pd.cut(df[income_measure], bins, labels=TPC_BIN_LABELS, right=right)
     return df
 
 
@@ -435,7 +449,7 @@ def create_distribution_table(calc, groupby, result_type,
     calc : the Calculator object
     groupby : String object
         options for input: 'weighted_deciles', 'small_income_bins',
-        'large_income_bins', 'webapp_income_bins';
+        'large_income_bins', 'webapp_income_bins', 'actual_tpc_bins';
         determines how the columns in the resulting DataFrame are sorted
     result_type : String object
         options for input: 'weighted_sum' or 'weighted_avg';
@@ -475,6 +489,12 @@ def create_distribution_table(calc, groupby, result_type,
     # weight of returns with positive Alternative Minimum Tax (AMT)
     res['num_returns_AMT'] = res['s006'].where(res['c09600'] > 0, 0)
 
+    # CMM chnge  7.31: weight of returns with positive income tax
+    res['has_tax'] = res['s006'].where(res['e08800'] > 0)
+
+    # CMM change 8.3: weight of returns with positive payroll tax
+    res['has_payroll'] = res['s006'].where(res['_fica'] > 0)
+
     # sorts the data
     if groupby == "weighted_deciles":
         df = add_weighted_decile_bins(res, income_measure=income_measure)
@@ -484,13 +504,15 @@ def create_distribution_table(calc, groupby, result_type,
         df = add_income_bins(res, compare_with="tpc", income_measure=income_measure)
     elif groupby == "webapp_income_bins":
         df = add_income_bins(res, compare_with="webapp", income_measure=income_measure)
+    elif groupby == "useful_tpc_bins":
+        df = add_income_bins(res, compare_with="srs_tpc", income_measure=income_measure)
     else:
         err = ("groupby must be either 'weighted_deciles' or 'small_income_bins'"
-               "or 'large_income_bins' or 'webapp_income_bins'")
+               "or 'large_income_bins' or 'webapp_income_bins' or 'useful_tpc_bins'")
         raise ValueError(err)
 
     # manipulates the data
-    pd.options.display.float_format = '{:8,.0f}'.format
+    pd.options.display.float_format = '{:8,.0f}'.format 
     if result_type == "weighted_sum":
         df = weighted(df, STATS_COLUMNS)
         gp_mean = df.groupby('bins', as_index=False)[TABLE_COLUMNS].sum()
@@ -519,7 +541,7 @@ def create_difference_table(calc1, calc2, groupby,
     calc2, the other Calculator object
     groupby, String object
         options for input: 'weighted_deciles', 'small_income_bins',
-        'large_income_bins', 'webapp_income_bins'
+        'large_income_bins', 'webapp_income_bins', 'useful_tpc_bins'
         determines how the columns in the resulting DataFrame are sorted
 
 
@@ -538,9 +560,11 @@ def create_difference_table(calc1, calc2, groupby,
         df = add_income_bins(res2, compare_with="tpc", income_measure=income_measure)
     elif groupby == "webapp_income_bins":
         df = add_income_bins(res2, compare_with="webapp", income_measure=income_measure)
+    elif groupby == "useful_tpc_bins":
+        df = add_income_bins(res2, compare_with="srs_tpc", income_measure=income_measure)
     else:
         err = ("groupby must be either 'weighted_deciles' or 'small_income_bins'"
-               "or 'large_income_bins' or 'webapp_income_bins'")
+               "or 'large_income_bins' or 'webapp_income_bins' or 'useful_tpc_bins'")
         raise ValueError(err)
 
     # Difference in plans

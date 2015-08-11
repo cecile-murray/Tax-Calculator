@@ -32,6 +32,7 @@ class Parameters(object):
     def __init__(self, start_year=DEFAULT_START_YEAR, budget_years=12,
                  inflation_rate=None, inflation_rates=None, data=None,
                  **kwargs):
+    # Modified so you don't run off the end of the inflation rate dictionary
 
         if inflation_rate and inflation_rates:
             raise ValueError("Can only specify either one constant inflation"

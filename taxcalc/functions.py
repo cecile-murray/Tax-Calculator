@@ -13,6 +13,16 @@ def FilingStatus(MARS):
 
     return _sep 
 
+# Boolean if has 
+@iterate_jit(nopython=True)
+def HasIncomeTax(e08800):
+    if e08800 > 0:
+        has_tax = 1
+    else:
+        has_tax = 0
+
+    return has_tax
+
 @iterate_jit(nopython=True)
 def Adj(   e35300_0, e35600_0, e35910_0, e03150, e03210, e03600, e03260,
                 e03270, e03300, e03400, e03500, e03280, e03900, e04000,
@@ -138,6 +148,27 @@ def SSBenefits(SSIND, MARS, e02500, _ymod, e02400, SS_thd50, SS_thd85, SS_percen
 def AGI(_ymod1, c02500, c02700, e02615, c02900, e00100, e02500, XTOT, 
                 II_em, II_em_ps, MARS, _sep, _fixup, II_prt):
 
+    '''
+    VARIABLES:
+
+    _ymod1 - a lot of kinds of taxable-seeming income things
+    c02500 - taxable SS benefits (calculated)
+    c02700 - foreign earned income exclusion
+    e02615 - Form 8889 Taxable H Distribution and Total Income New 2010 (puf)
+    c02900 - Total Adjustments (calculated)
+    e00100 - AGI (puf)
+    e02500 - taxable SS benefits (puf)
+    XTOT - total exemptions (puf)
+    II_em - Personal and dependent exemption amount
+    II_em_ps - Personal exemption phaseout starting income
+    MARS - filing status (puf)
+    _sep - simpler version of filing status
+    _fixup - ??????
+    II_prt - Personal exemption phaseout rate
+
+    '''
+
+
     # Adjusted Gross Income
 
     c02650 = _ymod1 + c02500 - c02700 + e02615  # Gross Income
@@ -163,6 +194,15 @@ def AGI(_ymod1, c02500, c02700, e02615, c02900, e00100, e02500, XTOT,
     c04600 = _prexmp * (1 - _dispc)
     
     return (c02650, c00100, _agierr, _posagi, _ywossbe, _ywossbc, _prexmp, c04600)
+
+# Cecile testing a way to calculate expanded cash income more in line with TPC
+@iterate_jit(nopython=True, puf=True)
+def tpc_exp_cash(e00400, e01500, e01700, e02400, e03290, e00100):
+
+    exp_cash = e00400 + e01500 + e01700 + e02400 + e03290 + e00100
+
+    return exp_cash
+
 
 @iterate_jit(nopython=True, puf=True)
 def ItemDed(_posagi, e17500, e18400, e18425, e18450, e18500, e18800, e18900,
@@ -1723,4 +1763,6 @@ def ExpandIncome(FICA_ss_trt, SS_Earnings_c, e00200, FICA_mc_trt, e02400,
      
 
     return (_expanded_income)
+
+
 
